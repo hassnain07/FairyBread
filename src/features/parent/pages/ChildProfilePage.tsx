@@ -5,9 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Button } from '../../../components/ui/Button';
 import { Progress } from '../../../components/ui/Progress';
 import { dataClient } from '../../../lib/data/client';
-
-// TODO: replace hardcoded familyId with auth context
-const FAMILY_ID = 'f1';
+import { useAuth } from '../../../app/providers';
 
 // Static enrichment data per child id — mirrors prototype display
 const enrichmentByChildId: Record<string, {
@@ -25,10 +23,11 @@ type Tab = 'overview' | 'goals' | 'attendance' | 'sessions' | 'notes';
 
 export function ChildProfilePage() {
   const { childId } = useParams<{ childId: string }>();
+  const { familyId } = useAuth();
 
   const { data: children = [] } = useQuery({
-    queryKey: ['children', FAMILY_ID],
-    queryFn: () => dataClient.getChildren(FAMILY_ID),
+    queryKey: ['children', familyId],
+    queryFn: () => dataClient.getChildren(familyId),
   });
 
   const child = children.find(c => c.id === childId) ?? children[0];

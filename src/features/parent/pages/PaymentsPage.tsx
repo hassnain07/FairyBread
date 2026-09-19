@@ -1,58 +1,252 @@
-import { ArrowRight, Check, CircleDollarSign, Clock3, Download, FileText, Upload } from 'lucide-react';
+import { ArrowRight, Check, CircleDollarSign, Clock3, Download, FileText, Plus, Upload, X } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../../components/ui/Button';
 import { useAuth } from '../../../app/providers';
 import { useBookingEligibility } from '../hooks/useBookingEligibility';
 import { dataClient } from '../../../lib/data/client';
 import { TERM_BASE_PRICE, REGISTRATION_FEE, GST_RATE, TERM_CREDITS } from '../../../lib/config';
+import type { Payment } from '../../../types/payment';
 
 const subtotal = TERM_BASE_PRICE + REGISTRATION_FEE;
-const gst = Math.round(subtotal * GST_RATE);
-const total = subtotal + gst;
+const termGst = Math.round(subtotal * GST_RATE);
+const termTotal = subtotal + termGst;
+
+const FAMILY_NAMES: Record<string, string> = {
+  f1: 'Sarah Johnson', f2: 'Claire Brown', f3: 'James Taylor', f4: 'Michael Chen',
+};
 
 interface IndividualClassDetails {
-  subject: string;
-  day: string;
-  time: string;
-  tutor: string;
-  child: string;
-  amount: number;
+  subject: string; day: string; time: string; tutor: string; child: string; amount: number;
 }
 
-export function PaymentsPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { familyId } = useAuth();
-  const { gatingState, activeTerm, isLoading } = useBookingEligibility(familyId);
+type PurchaseFlow = 'term' | 'individual';
 
-  // Detect if we arrived here from BookClassPage for an individual class payment
-  const locationState = location.state as { type?: string; classDetails?: IndividualClassDetails } | null;
-  const isIndividualFlow = locationState?.type === 'individual';
-  const classDetails = locationState?.classDetails;
+// ── Status badge ──────────────────────────────────────────────────────────────
+function StatusBadge({ status }: { status: Payment['status'] }) {
+  const map: Record<string, string> = { paid: 'confirmed', pending: 'pending', failed: 'failed', rejected: 'failed' };
+  const label: Record<string, string> = { paid: 'Verified', pending: 'Pending', failed: 'Failed', rejected: 'Rejected' };
+  return (
+    <span className={`table-status ${map[status] ?? ''}`}>
+      {status === 'paid' && <Check size={11} style={{ marginRight: 3 }} />}
+      {status === 'pending' && <Clock3 size={11} style={{ marginRight: 3 }} />}
+      {label[status] ?? status}
+    </span>
+  );
+}
 
-  const [step, setStep] = useState(1);
+// ── Payment row card ──────────────────────────────────────────────────────────
+function PaymentCard({ payment, onView }: { payment: Payment; onView: (p: Payment) => void }) {
+  const isClass = payment.type === 'individual_class';
+  const total = payment.amount + payment.gst;
+  const date = new Date(payment.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  return (
+    <div
+      className="card"
+      style={{ display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer', padding: '18px 22px' }}
+      onClick={() => onView(payment)}
+    >
+      <div
+        style={{
+          width: 42, height: 42, borderRadius: 12, flexShrink: 0,
+          background: isClass ? 'var(--teal-soft)' : 'var(--pink-soft)',
+          color: isClass ? 'var(--teal)' : 'var(--pink)',
+          display: 'grid', placeItems: 'center',
+        }}
+      >
+        <CircleDollarSign size={20} />
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <strong style={{ fontSize: 13, display: 'block' }}>
+          {isClass
+            ? `${payment.class_subject ?? 'Individual class'} — ${payment.child_name ?? ''}`
+            : `Term payment${payment.term_label ? ` · ${payment.term_label}` : ''}`}
+        </strong>
+        <span style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3, display: 'block' }}>
+          {payment.reference} · {date}
+        </span>
+        {isClass && payment.class_day && (
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+            {payment.class_day} · {payment.class_time} · {payment.class_tutor}
+          </span>
+        )}
+      </div>
+
+      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+        <strong style={{ fontSize: 16, display: 'block' }}>${total.toFixed(0)}</strong>
+        <span style={{ fontSize: 10, color: 'var(--muted)' }}>AUD</span>
+      </div>
+
+      <StatusBadge status={payment.status} />
+    </div>
+  );
+}
+
+// ── Detail modal ──────────────────────────────────────────────────────────────
+function PaymentDetailModal({ payment, onClose }: { payment: Payment; onClose: () => void }) {
+  const total = payment.amount + payment.gst;
+  const isClass = payment.type === 'individual_class';
+  const date = new Date(payment.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 420, textAlign: 'left' }} onClick={e => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        <div className="modal-icon" style={{ background: isClass ? 'var(--teal-soft)' : 'var(--pink-soft)', color: isClass ? 'var(--teal)' : 'var(--pink)' }}>
+          <CircleDollarSign size={22} />
+        </div>
+        <h2 style={{ textAlign: 'center', fontSize: 20 }}>
+          {isClass ? 'Individual class payment' : 'Term payment'}
+        </h2>
+
+        <div className="review-details" style={{ marginTop: 16 }}>
+          {isClass ? (
+            <>
+              <div className="review-detail-row"><span>Subject</span><b>{payment.class_subject}</b></div>
+              <div className="review-detail-row"><span>Child</span><b>{payment.child_name}</b></div>
+              <div className="review-detail-row"><span>Day</span><b>{payment.class_day}</b></div>
+              <div className="review-detail-row"><span>Time</span><b>{payment.class_time}</b></div>
+              <div className="review-detail-row"><span>Tutor</span><b>{payment.class_tutor}</b></div>
+            </>
+          ) : (
+            <div className="review-detail-row"><span>Term</span><b>{payment.term_label ?? '—'}</b></div>
+          )}
+          <div className="review-detail-row"><span>Reference</span><b><code style={{ fontSize: 11 }}>{payment.reference}</code></b></div>
+          <div className="review-detail-row"><span>Date submitted</span><b>{date}</b></div>
+          <div className="review-detail-row"><span>Amount</span><b>${payment.amount.toFixed(0)}</b></div>
+          <div className="review-detail-row"><span>GST (10%)</span><b>${payment.gst.toFixed(0)}</b></div>
+          <div className="review-detail-row"><span>Total</span><b style={{ fontSize: 15 }}>${total.toFixed(0)} AUD</b></div>
+          <div className="review-detail-row">
+            <span>Status</span>
+            <StatusBadge status={payment.status} />
+          </div>
+          {payment.receipt_filename && (
+            <div className="review-detail-row">
+              <span>Receipt</span>
+              <b style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--teal)', fontSize: 12 }}>
+                <FileText size={13} />{payment.receipt_filename}
+              </b>
+            </div>
+          )}
+        </div>
+
+        {payment.status === 'pending' && (
+          <div className="pending-verify-note" style={{ marginTop: 16 }}>
+            <Clock3 size={16} />
+            <span>Your payment is being reviewed. We'll notify you once it's verified — usually within 1–2 business days.</span>
+          </div>
+        )}
+
+        <div style={{ marginTop: 20 }}>
+          <Button variant="soft" icon={Download} onClick={onClose}>Download receipt</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Term purchase flow (inline panel) ────────────────────────────────────────
+function TermPurchasePanel({
+  familyId, familyName, onDone, onCancel,
+}: { familyId: string; familyName: string; onDone: () => void; onCancel: () => void }) {
+  const qc = useQueryClient();
+  const [step, setStep] = useState<1 | 2>(1);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState(false);
 
-  const FAMILY_NAMES: Record<string, string> = { f1: 'Sarah Johnson', f2: 'Claire Brown', f3: 'James Taylor', f4: 'Michael Chen' };
-  const familyName = FAMILY_NAMES[familyId] ?? familyId;
-
-  async function submitTermPayment() {
-    await dataClient.submitPayment({
+  const { mutate: submit, isPending } = useMutation({
+    mutationFn: () => dataClient.submitPayment({
       family_id: familyId, family_name: familyName, type: 'term',
-      amount: subtotal, gst, status: 'pending',
+      amount: subtotal, gst: termGst, status: 'pending',
       reference: `TERM-${familyId.toUpperCase()}`,
       term_label: 'Term 3, 2025',
       receipt_filename: uploadedFile ?? undefined,
-    });
-    setSubmitted(true);
-  }
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payments', familyId] });
+      onDone();
+    },
+  });
 
-  async function submitIndividualPayment() {
-    if (!classDetails) return;
-    const classGst = Math.round(classDetails.amount * GST_RATE);
-    await dataClient.submitPayment({
+  return (
+    <div className="card invoice">
+      <div className="invoice-head" style={{ marginBottom: 16 }}>
+        <div><span className="label">New term payment</span><h3>10-week term package</h3></div>
+        <button style={{ background: 'none', color: 'var(--muted)', cursor: 'pointer' }} onClick={onCancel}>
+          <X size={18} />
+        </button>
+      </div>
+
+      {step === 1 && (
+        <>
+          <div className="invoice-line"><span>10-week term ({TERM_CREDITS} class credits)</span><b>${TERM_BASE_PRICE}</b></div>
+          <div className="invoice-line"><span>Registration fee</span><b>${REGISTRATION_FEE}</b></div>
+          <div className="divider" />
+          <div className="invoice-line"><span>Subtotal</span><b>${subtotal}</b></div>
+          <div className="invoice-line"><span>GST (10%)</span><b>${termGst}</b></div>
+          <div className="divider" />
+          <div className="invoice-line total"><span>Total due</span><b>${termTotal}</b></div>
+          <div className="bank-details-card" style={{ marginTop: 16 }}>
+            <div className="bank-details-head"><CircleDollarSign size={18} /><span>Bank transfer details</span></div>
+            <div className="bank-detail-row"><span>Account name</span><b>Fairybread &amp; Fractions Tutoring</b></div>
+            <div className="bank-detail-row"><span>BSB</span><b>062 000</b></div>
+            <div className="bank-detail-row"><span>Account number</span><b>1234 5678</b></div>
+            <div className="bank-detail-row"><span>Reference</span><b>TERM-{familyId.toUpperCase()}</b></div>
+          </div>
+          <div className="invoice-actions">
+            <Button variant="ghost" onClick={onCancel}>Cancel</Button>
+            <Button onClick={() => setStep(2)} icon={Check}>I've made this payment</Button>
+          </div>
+        </>
+      )}
+
+      {step === 2 && (
+        <>
+          <span className="label">Upload proof of payment</span>
+          <h3 style={{ margin: '6px 0 14px' }}>Share your receipt</h3>
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
+            Upload a screenshot or PDF of your bank transfer confirmation.
+          </p>
+          {!uploadedFile ? (
+            <div className="upload-area" onClick={() => setUploadedFile('term-payment-receipt.jpg')}>
+              <Upload size={28} /><strong>Drag &amp; drop or click to upload</strong><span>JPG, PNG or PDF · up to 10MB</span>
+            </div>
+          ) : (
+            <div className="upload-attached">
+              <div className="upload-file-info">
+                <FileText size={20} />
+                <div><strong>{uploadedFile}</strong><span>Attached · ready to submit</span></div>
+                <Check size={18} className="teal-text" />
+              </div>
+              <button className="upload-remove" onClick={() => setUploadedFile(null)}>Remove file</button>
+            </div>
+          )}
+          <div className="form-actions" style={{ marginTop: 16 }}>
+            <Button variant="ghost" onClick={() => setStep(1)}>Back</Button>
+            <Button disabled={!uploadedFile || isPending} onClick={() => submit()} icon={ArrowRight}>
+              {isPending ? 'Submitting…' : 'Submit proof'}
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Individual class payment flow (inline panel) ──────────────────────────────
+function IndividualPaymentPanel({
+  familyId, familyName, classDetails, onDone, onCancel,
+}: { familyId: string; familyName: string; classDetails: IndividualClassDetails; onDone: () => void; onCancel: () => void }) {
+  const qc = useQueryClient();
+  const [step, setStep] = useState<1 | 2>(1);
+  const [uploadedFile, setUploadedFile] = useState<string | null>(null);
+  const classGst = Math.round(classDetails.amount * GST_RATE);
+  const classTotal = classDetails.amount + classGst;
+
+  const { mutate: submit, isPending } = useMutation({
+    mutationFn: () => dataClient.submitPayment({
       family_id: familyId, family_name: familyName, type: 'individual_class',
       amount: classDetails.amount, gst: classGst, status: 'pending',
       reference: `CLASS-${classDetails.child.split(' ')[0].toUpperCase()}-${classDetails.subject.slice(0, 4).toUpperCase()}`,
@@ -60,334 +254,236 @@ export function PaymentsPage() {
       class_subject: classDetails.subject, class_day: classDetails.day,
       class_time: classDetails.time, class_tutor: classDetails.tutor,
       receipt_filename: uploadedFile ?? undefined,
-    });
-    setSubmitted(true);
-  }
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['payments', familyId] });
+      onDone();
+    },
+  });
 
-  if (isLoading) return <div className="page-stack"><p>Loading...</p></div>;
-
-  // ── Individual class payment flow ─────────────────────────────────────────────
-  if (isIndividualFlow && classDetails) {
-    const classGst = Math.round(classDetails.amount * GST_RATE);
-    const classTotal = classDetails.amount + classGst;
-
-    if (submitted) {
-      return (
-        <div className="page-stack">
-          <div className="payment-highlight pending">
-            <div>
-              <span className="label">Individual class payment</span>
-              <h2>Payment pending verification</h2>
-              <p>We'll confirm {classDetails.child.split(' ')[0]}'s booking once we've verified your transfer.</p>
-            </div>
-            <div className="payment-total">
-              <span className="pending-text">PENDING</span>
-              <strong>${classTotal}</strong>
-              <small>AUD · 1 class</small>
-            </div>
-          </div>
-          <div className="card invoice">
-            <div className="invoice-head">
-              <div><span className="label">Individual class</span><h3>{classDetails.subject}</h3></div>
-              <span className="status pending"><Clock3 size={13} />Pending</span>
-            </div>
-            <div className="review-details" style={{ marginBottom: 0 }}>
-              <div className="review-detail-row"><span>Child</span><b>{classDetails.child}</b></div>
-              <div className="review-detail-row"><span>Day</span><b>{classDetails.day}</b></div>
-              <div className="review-detail-row"><span>Time</span><b>{classDetails.time}</b></div>
-              <div className="review-detail-row"><span>Tutor</span><b>{classDetails.tutor}</b></div>
-            </div>
-            <div className="divider" />
-            <div className="invoice-line"><span>Class fee</span><b>${classDetails.amount}.00</b></div>
-            <div className="invoice-line"><span>GST (10%)</span><b>${classGst}.00</b></div>
-            <div className="divider" />
-            <div className="invoice-line total"><span>Total</span><b>${classTotal}.00 AUD</b></div>
-            <div className="pending-verify-note">
-              <Clock3 size={18} />
-              <span>Booking will be confirmed once your payment is verified — usually within 1–2 business days.</span>
-            </div>
-            <div className="invoice-actions">
-              <Button onClick={() => navigate('/parent/bookings')} icon={ArrowRight}>View my bookings</Button>
-            </div>
-          </div>
+  return (
+    <div className="card invoice">
+      <div className="invoice-head" style={{ marginBottom: 16 }}>
+        <div>
+          <span className="label">Individual class · {classDetails.child}</span>
+          <h3>{classDetails.subject}</h3>
+          <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+            {classDetails.day} · {classDetails.time} · {classDetails.tutor}
+          </p>
         </div>
-      );
-    }
-
-    return (
-      <div className="page-stack">
-        <div className="payment-highlight">
-          <div>
-            <span className="label">Individual class · {classDetails.child}</span>
-            <h2>{classDetails.subject}</h2>
-            <p>{classDetails.day} · {classDetails.time} · {classDetails.tutor}</p>
-          </div>
-          <div className="payment-total">
-            <span>TOTAL DUE</span>
-            <strong>${classTotal}</strong>
-            <small>AUD · 1 class</small>
-          </div>
-        </div>
-
-        <div className="card invoice">
-          <div className="invoice-head">
-            <div><span className="label">Invoice</span><h3>Individual class booking</h3></div>
-          </div>
-
-          {step === 1 && (
-            <>
-              <div className="review-details" style={{ marginBottom: 16 }}>
-                <div className="review-detail-row"><span>Child</span><b>{classDetails.child}</b></div>
-                <div className="review-detail-row"><span>Subject</span><b>{classDetails.subject}</b></div>
-                <div className="review-detail-row"><span>Day</span><b>{classDetails.day}</b></div>
-                <div className="review-detail-row"><span>Time</span><b>{classDetails.time}</b></div>
-                <div className="review-detail-row"><span>Tutor</span><b>{classDetails.tutor}</b></div>
-              </div>
-              <div className="invoice-line"><span>Class fee</span><b>${classDetails.amount}.00</b></div>
-              <div className="invoice-line"><span>GST (10%)</span><b>${classGst}.00</b></div>
-              <div className="divider" />
-              <div className="invoice-line total"><span>Total due</span><b>${classTotal}.00 AUD</b></div>
-              <div className="bank-details-card">
-                <div className="bank-details-head"><CircleDollarSign size={18} /><span>Bank transfer details</span></div>
-                <div className="bank-detail-row"><span>Account name</span><b>Fairybread &amp; Fractions Tutoring</b></div>
-                <div className="bank-detail-row"><span>BSB</span><b>062 000</b></div>
-                <div className="bank-detail-row"><span>Account number</span><b>1234 5678</b></div>
-                <div className="bank-detail-row"><span>Reference</span><b>CLASS-{classDetails.child.split(' ')[0].toUpperCase()}-{classDetails.subject.slice(0, 4).toUpperCase()}</b></div>
-              </div>
-              <div className="invoice-actions">
-                <Button variant="ghost" onClick={() => navigate(-1)}>Back</Button>
-                <Button onClick={() => setStep(2)} icon={Check}>I've made this payment</Button>
-              </div>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              <span className="label">Upload proof of payment</span>
-              <h3>Share your receipt</h3>
-              <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
-                Upload a screenshot or PDF of your bank transfer confirmation.
-              </p>
-              {!uploadedFile ? (
-                <div className="upload-area" onClick={() => setUploadedFile('class-payment-receipt.jpg')}>
-                  <Upload size={28} /><strong>Drag &amp; drop or click to upload</strong><span>JPG, PNG or PDF · up to 10MB</span>
-                </div>
-              ) : (
-                <div className="upload-attached">
-                  <div className="upload-file-info">
-                    <FileText size={20} />
-                    <div><strong>{uploadedFile}</strong><span>Attached · ready to submit</span></div>
-                    <Check size={18} className="teal-text" />
-                  </div>
-                  <button className="upload-remove" onClick={() => setUploadedFile(null)}>Remove file</button>
-                </div>
-              )}
-              <div className="form-actions">
-                <Button variant="ghost" onClick={() => setStep(1)}>Back</Button>
-                <Button disabled={!uploadedFile} onClick={submitIndividualPayment} icon={ArrowRight}>Submit proof</Button>
-              </div>
-            </>
-          )}
-        </div>
+        <button style={{ background: 'none', color: 'var(--muted)', cursor: 'pointer' }} onClick={onCancel}>
+          <X size={18} />
+        </button>
       </div>
-    );
-  }
 
-  // ── Pending verification state ──────────────────────────────────────────────
-  if (submitted) {
-    return (
-      <div className="page-stack">
-        <div className="payment-highlight pending">
-          <div>
-            <span className="label">Term payment</span>
-            <h2>Payment pending verification</h2>
-            <p>We'll unlock your class bookings once we've confirmed your transfer.</p>
+      {step === 1 && (
+        <>
+          <div className="review-details" style={{ marginBottom: 16 }}>
+            <div className="review-detail-row"><span>Child</span><b>{classDetails.child}</b></div>
+            <div className="review-detail-row"><span>Subject</span><b>{classDetails.subject}</b></div>
+            <div className="review-detail-row"><span>Day</span><b>{classDetails.day}</b></div>
+            <div className="review-detail-row"><span>Time</span><b>{classDetails.time}</b></div>
+            <div className="review-detail-row"><span>Tutor</span><b>{classDetails.tutor}</b></div>
           </div>
-          <div className="payment-total">
-            <span className="pending-text">PENDING</span>
-            <strong>${total}</strong>
-            <small>AUD · {TERM_CREDITS}-week term</small>
-          </div>
-        </div>
-        <div className="card invoice">
-          <div className="invoice-head">
-            <div><span className="label">Term payment</span><h3>10-week term package</h3></div>
-            <span className="status pending"><Clock3 size={13} />Pending</span>
-          </div>
-          <div className="invoice-line"><span>10-week term ({TERM_CREDITS} class credits)</span><b>${TERM_BASE_PRICE}</b></div>
-          <div className="invoice-line"><span>Registration fee</span><b>${REGISTRATION_FEE}</b></div>
+          <div className="invoice-line"><span>Class fee</span><b>${classDetails.amount}.00</b></div>
+          <div className="invoice-line"><span>GST (10%)</span><b>${classGst}.00</b></div>
           <div className="divider" />
-          <div className="invoice-line total"><span>Total</span><b>${total}</b></div>
-          <div className="pending-verify-note">
-            <Clock3 size={18} />
-            <span>Class booking will unlock once your payment is verified — usually within 1–2 business days.</span>
+          <div className="invoice-line total"><span>Total due</span><b>${classTotal}.00 AUD</b></div>
+          <div className="bank-details-card" style={{ marginTop: 16 }}>
+            <div className="bank-details-head"><CircleDollarSign size={18} /><span>Bank transfer details</span></div>
+            <div className="bank-detail-row"><span>Account name</span><b>Fairybread &amp; Fractions Tutoring</b></div>
+            <div className="bank-detail-row"><span>BSB</span><b>062 000</b></div>
+            <div className="bank-detail-row"><span>Account number</span><b>1234 5678</b></div>
+            <div className="bank-detail-row"><span>Reference</span><b>CLASS-{classDetails.child.split(' ')[0].toUpperCase()}-{classDetails.subject.slice(0, 4).toUpperCase()}</b></div>
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Active term — already paid ──────────────────────────────────────────────
-  if (gatingState === 'ACTIVE_TERM' && activeTerm?.payment?.status === 'paid') {
-    return (
-      <div className="page-stack">
-        <div className="payment-highlight">
-          <div>
-            <span className="label">Current term</span>
-            <h2>Payment complete</h2>
-            <p>Your class bookings are unlocked. {activeTerm.classes_remaining} of {activeTerm.classes_included} credits remaining.</p>
-          </div>
-          <div className="payment-total">
-            <span>PAID</span>
-            <strong>${total}</strong>
-            <small>AUD · {TERM_CREDITS}-week term</small>
-          </div>
-        </div>
-        <div className="card invoice">
-          <div className="invoice-head">
-            <div><span className="label">Invoice #FF-2025-031</span><h3>10-week term package</h3></div>
-            <span className="status confirmed"><Check size={13} />Paid</span>
-          </div>
-          <div className="invoice-line"><span>10-week term ({TERM_CREDITS} class credits)</span><b>${TERM_BASE_PRICE}</b><small>Paid</small></div>
-          <div className="invoice-line"><span>Registration fee</span><b>${REGISTRATION_FEE}</b><small>Paid</small></div>
-          <div className="divider" />
-          <div className="invoice-line"><span>Subtotal</span><b>${subtotal}</b></div>
-          <div className="invoice-line"><span>GST (10%)</span><b>${gst}</b></div>
-          <div className="divider" />
-          <div className="invoice-line total"><span>Total paid</span><b>${total}</b></div>
           <div className="invoice-actions">
-            <Button variant="soft" icon={Download}>Download receipt</Button>
-            <Button onClick={() => navigate('/parent/book-class')} icon={ArrowRight}>Book classes</Button>
+            <Button variant="ghost" onClick={onCancel}>Cancel</Button>
+            <Button onClick={() => setStep(2)} icon={Check}>I've made this payment</Button>
           </div>
-        </div>
-      </div>
-    );
+        </>
+      )}
+
+      {step === 2 && (
+        <>
+          <span className="label">Upload proof of payment</span>
+          <h3 style={{ margin: '6px 0 14px' }}>Share your receipt</h3>
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
+            Upload a screenshot or PDF of your bank transfer confirmation.
+          </p>
+          {!uploadedFile ? (
+            <div className="upload-area" onClick={() => setUploadedFile('class-payment-receipt.jpg')}>
+              <Upload size={28} /><strong>Drag &amp; drop or click to upload</strong><span>JPG, PNG or PDF · up to 10MB</span>
+            </div>
+          ) : (
+            <div className="upload-attached">
+              <div className="upload-file-info">
+                <FileText size={20} />
+                <div><strong>{uploadedFile}</strong><span>Attached · ready to submit</span></div>
+                <Check size={18} className="teal-text" />
+              </div>
+              <button className="upload-remove" onClick={() => setUploadedFile(null)}>Remove file</button>
+            </div>
+          )}
+          <div className="form-actions" style={{ marginTop: 16 }}>
+            <Button variant="ghost" onClick={() => setStep(1)}>Back</Button>
+            <Button disabled={!uploadedFile || isPending} onClick={() => submit()} icon={ArrowRight}>
+              {isPending ? 'Submitting…' : 'Submit proof'}
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+export function PaymentsPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { familyId } = useAuth();
+  const qc = useQueryClient();
+  const { gatingState, activeTerm, isLoading: eligibilityLoading } = useBookingEligibility(familyId);
+  const familyName = FAMILY_NAMES[familyId] ?? familyId;
+
+  // Detect if we arrived here from BookClassPage for an individual class payment
+  const locationState = location.state as { type?: string; classDetails?: IndividualClassDetails } | null;
+  const incomingClassDetails = locationState?.type === 'individual' ? locationState.classDetails : undefined;
+
+  // Active purchase flow: null = list view, 'term' = term purchase, 'individual' = class payment
+  const [activeFlow, setActiveFlow] = useState<PurchaseFlow | null>(
+    incomingClassDetails ? 'individual' : null,
+  );
+  const [viewingPayment, setViewingPayment] = useState<Payment | null>(null);
+
+  const { data: payments = [], isLoading: paymentsLoading } = useQuery({
+    queryKey: ['payments', familyId],
+    queryFn: () => dataClient.getPayments(familyId),
+  });
+
+  // Sort newest first
+  const sorted = [...payments].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
+
+  const paidTotal = payments.filter(p => p.status === 'paid').reduce((s, p) => s + p.amount + p.gst, 0);
+  const pendingCount = payments.filter(p => p.status === 'pending').length;
+
+  const isLoading = eligibilityLoading || paymentsLoading;
+
+  function handleFlowDone() {
+    setActiveFlow(null);
+    // Clear the location state so refreshing doesn't re-open the individual flow
+    navigate('/parent/payments', { replace: true });
+    qc.invalidateQueries({ queryKey: ['payments', familyId] });
   }
 
-  // ── Purchase flow — NO_TERM_EVER or TERM_EXPIRED ────────────────────────────
-  const isRenewal = gatingState === 'TERM_EXPIRED';
+  if (isLoading) return <div className="page-stack"><p>Loading…</p></div>;
 
   return (
     <div className="page-stack">
-      {/* Hero — explains what they're purchasing and why */}
+
+      {/* ── Header summary strip ── */}
       <div className="payment-highlight">
         <div>
-          <span className="label">{isRenewal ? 'Renew your term' : 'Purchase your first term'}</span>
-          <h2>{isRenewal ? 'Ready for another term?' : 'Unlock your class bookings'}</h2>
+          <span className="label">Payment history</span>
+          <h2>Simple, clear and all in one place.</h2>
           <p>
-            {isRenewal
-              ? 'Purchase a new 10-week term to continue booking regular classes.'
-              : 'Pay for a 10-week term upfront to get 10 class credits. Book your classes any time during the term.'}
+            {payments.length === 0
+              ? 'No payments yet. Purchase a term to get started.'
+              : `${payments.length} payment${payments.length !== 1 ? 's' : ''} on record${pendingCount > 0 ? ` · ${pendingCount} pending verification` : ''}.`}
           </p>
         </div>
-        <div className="payment-total">
-          <span>TOTAL DUE</span>
-          <strong>${total}</strong>
-          <small>AUD · {TERM_CREDITS} classes included</small>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+          <div className="payment-total">
+            <span>TOTAL PAID</span>
+            <strong>${paidTotal.toFixed(0)}</strong>
+            <small>AUD · verified</small>
+          </div>
+          {/* Only show "Purchase term" if no active term or term expired */}
+          {gatingState !== 'ACTIVE_TERM' && activeFlow === null && (
+            <Button icon={Plus} onClick={() => setActiveFlow('term')}>
+              {gatingState === 'TERM_EXPIRED' ? 'Renew term' : 'Purchase term'}
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* What's included — only shown for new families */}
-      {!isRenewal && (
-        <div className="card" style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-          {[
-            { icon: '📅', title: '10-week term', desc: 'One term runs for 10 calendar weeks from your start date.' },
-            { icon: '🎟️', title: '10 class credits', desc: 'Book any class, any subject, any tutor — 1 credit per session.' },
-            { icon: '👨‍👩‍👧', title: 'Whole family', desc: 'Credits are shared across all your children — not per child.' },
-            { icon: '➕', title: 'Extra classes', desc: 'Used all 10? Book individual classes at $50 each.' },
-          ].map(item => (
-            <div key={item.title} style={{ flex: '1 1 180px' }}>
-              <div style={{ fontSize: 24, marginBottom: 6 }}>{item.icon}</div>
-              <strong style={{ fontSize: 13 }}>{item.title}</strong>
-              <p style={{ fontSize: 12, color: 'var(--muted)', margin: '4px 0 0' }}>{item.desc}</p>
-            </div>
-          ))}
+      {/* ── Active term status card ── */}
+      {activeTerm && (
+        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 22px' }}>
+          <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--teal-soft)', color: 'var(--teal)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+            <Check size={18} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <strong style={{ fontSize: 13, display: 'block' }}>Active term</strong>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+              {activeTerm.classes_remaining} of {activeTerm.classes_included} credits remaining ·
+              ends {new Date(activeTerm.end_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </span>
+          </div>
+          <Button variant="soft" onClick={() => navigate('/parent/book-class')} icon={ArrowRight}>Book a class</Button>
         </div>
       )}
 
-      <div className="card invoice">
-        <div className="invoice-head">
-          <div><span className="label">Invoice</span><h3>10-week term package</h3></div>
-        </div>
+      {/* ── Purchase flow panels (inline, not modal) ── */}
+      {activeFlow === 'term' && (
+        <TermPurchasePanel
+          familyId={familyId}
+          familyName={familyName}
+          onDone={handleFlowDone}
+          onCancel={() => setActiveFlow(null)}
+        />
+      )}
 
-        {/* Step 1 — Invoice + bank details */}
-        {step === 1 && (
-          <>
-            <div className="invoice-line"><span>10-week term ({TERM_CREDITS} class credits)</span><b>${TERM_BASE_PRICE}</b></div>
-            <div className="invoice-line"><span>Registration fee</span><b>${REGISTRATION_FEE}</b></div>
-            <div className="divider" />
-            <div className="invoice-line"><span>Subtotal</span><b>${subtotal}</b></div>
-            <div className="invoice-line"><span>GST (10%)</span><b>${gst}</b></div>
-            <div className="divider" />
-            <div className="invoice-line total"><span>Total due</span><b>${total}</b></div>
-            <div className="bank-details-card">
-              <div className="bank-details-head"><CircleDollarSign size={18} /><span>Bank transfer details</span></div>
-              <div className="bank-detail-row"><span>Account name</span><b>Fairybread &amp; Fractions Tutoring</b></div>
-              <div className="bank-detail-row"><span>BSB</span><b>062 000</b></div>
-              <div className="bank-detail-row"><span>Account number</span><b>1234 5678</b></div>
-              <div className="bank-detail-row"><span>Reference</span><b>TERM-{familyId.toUpperCase()}</b></div>
-            </div>
-            <div className="invoice-actions">
-              <Button variant="soft" icon={Download}>Download invoice</Button>
-              <Button onClick={() => setStep(2)} icon={Check}>I've made this payment</Button>
-            </div>
-          </>
-        )}
+      {activeFlow === 'individual' && incomingClassDetails && (
+        <IndividualPaymentPanel
+          familyId={familyId}
+          familyName={familyName}
+          classDetails={incomingClassDetails}
+          onDone={handleFlowDone}
+          onCancel={() => { setActiveFlow(null); navigate('/parent/payments', { replace: true }); }}
+        />
+      )}
 
-        {/* Step 2 — Upload proof */}
-        {step === 2 && (
-          <>
-            <span className="label">Upload proof of payment</span>
-            <h3>Share your receipt</h3>
-            <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>
-              Upload a screenshot or PDF of your bank transfer confirmation.
-            </p>
-            {!uploadedFile ? (
-              <div className="upload-area" onClick={() => setUploadedFile('term-payment-receipt.jpg')}>
-                <Upload size={28} /><strong>Drag &amp; drop or click to upload</strong><span>JPG, PNG or PDF · up to 10MB</span>
-              </div>
-            ) : (
-              <div className="upload-attached">
-                <div className="upload-file-info">
-                  <FileText size={20} />
-                  <div><strong>{uploadedFile}</strong><span>Attached · ready to submit</span></div>
-                  <Check size={18} className="teal-text" />
+      {/* ── Payment list ── */}
+      {activeFlow === null && (
+        <>
+          {sorted.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', padding: '40px 24px' }}>
+              <CircleDollarSign size={32} style={{ color: 'var(--muted)', margin: '0 auto 12px', display: 'block' }} />
+              <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 20 }}>No payments on record yet.</p>
+              <Button icon={Plus} onClick={() => setActiveFlow('term')}>Purchase a term</Button>
+            </div>
+          ) : (
+            <>
+              {/* Pending payments first */}
+              {sorted.filter(p => p.status === 'pending').length > 0 && (
+                <div>
+                  <p className="label" style={{ marginBottom: 10 }}>Awaiting verification</p>
+                  {sorted.filter(p => p.status === 'pending').map(p => (
+                    <PaymentCard key={p.id} payment={p} onView={setViewingPayment} />
+                  ))}
                 </div>
-                <button className="upload-remove" onClick={() => setUploadedFile(null)}>Remove file</button>
-              </div>
-            )}
-            <div className="form-actions">
-              <Button variant="ghost" onClick={() => setStep(1)}>Back</Button>
-              <Button disabled={!uploadedFile} onClick={submitTermPayment} icon={ArrowRight}>Submit proof</Button>
-            </div>
-          </>
-        )}
+              )}
 
-        {/* Step 3 — Confirmation */}
-        {step === 3 && (
-          <>
-            <div className="pending-verify-card">
-              <div className="pending-verify-icon"><Clock3 size={32} /></div>
-              <h3>Payment submitted</h3>
-              <p>
-                Thank you! We've received your proof of payment and will verify it within 1–2 business days.
-                Your class bookings will unlock as soon as we confirm.
-              </p>
-              <div className="pending-verify-detail">
-                <div className="pending-detail-row"><span>Amount</span><b>${total}.00 AUD</b></div>
-                <div className="pending-detail-row"><span>Includes</span><b>{TERM_CREDITS} class credits</b></div>
-                <div className="pending-detail-row"><span>Status</span><b className="pending-badge">Pending verification</b></div>
-              </div>
-              <div className="pending-booking-note">
-                <Clock3 size={16} /> Class booking unlocks once payment is verified.
-              </div>
-            </div>
-            <div className="form-actions">
-              <Button onClick={() => setSubmitted(true)} icon={ArrowRight}>Back to payments</Button>
-            </div>
-          </>
-        )}
-      </div>
+              {/* All other payments */}
+              {sorted.filter(p => p.status !== 'pending').length > 0 && (
+                <div>
+                  <p className="label" style={{ marginBottom: 10 }}>Payment history</p>
+                  {sorted.filter(p => p.status !== 'pending').map(p => (
+                    <PaymentCard key={p.id} payment={p} onView={setViewingPayment} />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+
+      {/* ── Payment detail modal ── */}
+      {viewingPayment && (
+        <PaymentDetailModal payment={viewingPayment} onClose={() => setViewingPayment(null)} />
+      )}
     </div>
   );
 }

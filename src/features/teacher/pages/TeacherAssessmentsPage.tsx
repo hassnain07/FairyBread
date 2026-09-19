@@ -95,7 +95,7 @@ export function TeacherAssessmentsView({ teacherId }: { teacherId: string }) {
         </div>
       ) : (
         byClass.map(({ cls, date, time, students, outcome }) => (
-          <div className={`card admin-class ${cls.color ?? 'pink'}`} key={cls.id} style={{ gap: 10 }}>
+          <div className={`card admin-class pink`} key={cls.id} style={{ gap: 10 }}>
             <div className="class-card-top">
               <span className="class-subject">{cls.subject}</span>
               <span className={`status-badge ${outcome === 'complete' ? 'green' : 'yellow'}`}>

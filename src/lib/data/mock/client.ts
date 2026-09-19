@@ -1,8 +1,10 @@
 import type { DataClient } from '../types';
 import { mockFamilies, mockChildren, mockTerms, mockPayments } from './families';
+import { mockConversations, mockMessages, mockNotifications } from './messages';
 import type { Child } from '../../../types/family';
 import type { ClassBooking, Assessment, IndividualClassPurchase, StudentReport } from '../../../types/booking';
 import type { Teacher, ClassInstance } from '../../../types/teacher';
+import type { ChatMessage } from '../../../types/message';
 import { INDIVIDUAL_CLASS_PRICE } from '../../config';
 
 let _children = [...mockChildren];
@@ -18,6 +20,9 @@ let _assessments: Assessment[] = [
 let _individualPurchases: IndividualClassPurchase[] = [];
 let _reports: StudentReport[] = [];
 let _payments = [...mockPayments];
+let _conversations = [...mockConversations];
+let _messages = [...mockMessages];
+let _notifications = [...mockNotifications];
 
 export const mockTeachers: Teacher[] = [
   { id: 'tch1', name: 'Jessica Taylor', initials: 'JT', subjects: ['Mathematics', 'English'], color: 'pink' },
@@ -160,5 +165,47 @@ export const mockDataClient: DataClient = {
     const a: Assessment = { ...assessment, id: `a${Date.now()}` };
     _assessments = [..._assessments, a];
     return a;
+  },
+  async getConversations(participantId) {
+    return _conversations.filter(c => c.participant_ids.includes(participantId));
+  },
+  async getMessages(conversationId) {
+    return _messages.filter(m => m.conversation_id === conversationId);
+  },
+  async sendMessage(msg) {
+    const m: ChatMessage = { ...msg, id: `m${Date.now()}`, created_at: new Date().toISOString() };
+    _messages = [..._messages, m];
+    // Update conversation last_message
+    _conversations = _conversations.map(c =>
+      c.id === msg.conversation_id
+        ? { ...c, last_message: msg.body, last_message_at: m.created_at }
+        : c
+    );
+    return m;
+  },
+  async markConversationRead(conversationId) {
+    _conversations = _conversations.map(c =>
+      c.id === conversationId ? { ...c, unread_count: 0 } : c
+    );
+  },
+  async getNotifications(familyId, teacherId) {
+    return _notifications.filter(n =>
+      (!n.family_id && !n.teacher_id) || // broadcast
+      (familyId && n.family_id === familyId) ||
+      (teacherId && n.teacher_id === teacherId)
+    );
+  },
+  async markNotificationRead(notificationId) {
+    _notifications = _notifications.map(n =>
+      n.id === notificationId ? { ...n, read: true } : n
+    );
+  },
+  async markAllNotificationsRead(familyId, teacherId) {
+    _notifications = _notifications.map(n => {
+      const mine = (!n.family_id && !n.teacher_id) ||
+        (familyId && n.family_id === familyId) ||
+        (teacherId && n.teacher_id === teacherId);
+      return mine ? { ...n, read: true } : n;
+    });
   },
 };

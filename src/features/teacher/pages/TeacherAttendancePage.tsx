@@ -4,8 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Button } from '../../../components/ui/Button';
 import { dataClient } from '../../../lib/data/client';
 
-// TODO: replace hardcoded teacherId with auth context
-const TEACHER_ID = 'tch1';
+// NOTE: TeacherAttendancePage passes 'tch1' as the default teacher.
+// When auth is implemented, replace with the logged-in teacher's ID from context.
 const ALL_FAMILY_IDS = ['f1', 'f2', 'f3', 'f4'];
 
 type Status = 'Present' | 'Absent' | 'No-show';
@@ -14,7 +14,7 @@ const STATUS_OPTS: Status[] = ['Present', 'Absent', 'No-show'];
 const colours: Record<string, string> = { c1: 'pink', c2: 'teal', c3: 'orange', c4: 'yellow', c5: 'magenta', c6: 'green' };
 
 export function TeacherAttendancePage() {
-  return <TeacherAttendanceView teacherId={TEACHER_ID} />;
+  return <TeacherAttendanceView teacherId="tch1" />;
 }
 
 export function TeacherAttendanceView({ teacherId }: { teacherId: string }) {

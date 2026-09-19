@@ -3,6 +3,7 @@ import type { Term } from '../../types/term';
 import type { ClassBooking, Assessment, IndividualClassPurchase, StudentReport } from '../../types/booking';
 import type { Payment, PaymentType } from '../../types/payment';
 import type { Teacher, ClassInstance } from '../../types/teacher';
+import type { Conversation, ChatMessage, AppNotification } from '../../types/message';
 
 export interface DataClient {
   // Families
@@ -41,6 +42,15 @@ export interface DataClient {
   // Teacher assessments
   getTeacherAssessments(teacherId: string): Promise<Assessment[]>;
   createTeacherAssessment(assessment: Omit<Assessment, 'id'>): Promise<Assessment>;
+  // Messages
+  getConversations(participantId: string): Promise<Conversation[]>;
+  getMessages(conversationId: string): Promise<ChatMessage[]>;
+  sendMessage(msg: Omit<ChatMessage, 'id' | 'created_at'>): Promise<ChatMessage>;
+  markConversationRead(conversationId: string): Promise<void>;
+  // Notifications
+  getNotifications(familyId?: string, teacherId?: string): Promise<AppNotification[]>;
+  markNotificationRead(notificationId: string): Promise<void>;
+  markAllNotificationsRead(familyId?: string, teacherId?: string): Promise<void>;
   // Unused PaymentType re-export for consumers
   _paymentType?: PaymentType;
 }

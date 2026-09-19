@@ -1,7 +1,10 @@
-import { Bell, ChevronRight, Menu, MoreHorizontal, PanelLeftClose } from 'lucide-react';
+import { Bell, Check, ChevronRight, Menu, MoreHorizontal, PanelLeftClose, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../app/providers';
+import { useNotifications } from '../../hooks/useNotifications';
+import type { AppNotification } from '../../types/message';
 
 export type Role = 'parent' | 'admin' | 'teacher';
 
@@ -27,8 +30,87 @@ const roleLabels: Record<Role, { name: string; initials: string; workspace: stri
   teacher: { name: 'Jessica Taylor', initials: 'JT', workspace: 'Teacher portal' },
 };
 
-export function AppShell({ children, nav, active, onNavChange, title, subtitle, role, menuOpen, onMenuToggle, onSwitchRole, onHome }: AppShellProps) {
+const notifColors: Record<string, string> = {
+  booking_confirmed: 'teal', booking_cancelled: 'orange', payment_received: 'green',
+  payment_approved: 'green', payment_rejected: 'orange', assessment_confirmed: 'pink',
+  term_expiring: 'yellow', report_ready: 'teal', message_received: 'pink', announcement: 'yellow',
+};
+
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60_000);
+  if (m < 1) return 'Just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function NotifDrawer({ familyId, teacherId, onClose }: { familyId?: string; teacherId?: string; onClose: () => void }) {
+  const navigate = useNavigate();
+  const { notifications, markRead, markAllRead } = useNotifications(familyId, teacherId);
+
+  function handleClick(n: AppNotification) {
+    if (!n.read) markRead.mutate(n.id);
+    if (n.action_url) { navigate(n.action_url); onClose(); }
+  }
+
+  return (
+    <>
+      <div className="notif-backdrop" onClick={onClose} />
+      <div className="notif-drawer">
+        <div className="notif-drawer-head">
+          <div>
+            <span className="label">Notifications</span>
+            <strong>{notifications.filter(n => !n.read).length} unread</strong>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {notifications.some(n => !n.read) && (
+              <button className="notif-mark-all" onClick={() => markAllRead.mutate()} title="Mark all read">
+                <Check size={13} /> All read
+              </button>
+            )}
+            <button className="notif-close" onClick={onClose}><X size={16} /></button>
+          </div>
+        </div>
+        <div className="notif-list">
+          {notifications.length === 0 && (
+            <div className="notif-empty">
+              <Bell size={28} />
+              <p>You're all caught up!</p>
+            </div>
+          )}
+          {notifications.map(n => (
+            <button
+              key={n.id}
+              className={`notif-item ${n.read ? 'read' : 'unread'}`}
+              onClick={() => handleClick(n)}
+            >
+              <span className={`notif-dot ${notifColors[n.type] ?? 'pink'}-bg`} />
+              <div className="notif-body">
+                <strong>{n.title}</strong>
+                <span>{n.body}</span>
+                <small>{timeAgo(n.created_at)}</small>
+              </div>
+              {!n.read && <i className="notif-unread-pip" />}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+export function AppShell({ children, nav, active, onNavChange, title, subtitle, role, menuOpen, onMenuToggle }: AppShellProps) {
   const { name, initials, workspace } = roleLabels[role];
+  const { familyId } = useAuth();
+  const [notifOpen, setNotifOpen] = useState(false);
+
+  // Determine participant id for notifications
+  const notifFamilyId = role === 'parent' ? familyId : undefined;
+  const notifTeacherId = role === 'teacher' ? 'tch1' : undefined;
+  const { unreadCount } = useNotifications(notifFamilyId, notifTeacherId);
+
   return (
     <div className={`app-shell ${role}-app`}>
       <aside className={menuOpen ? 'open' : ''} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -65,12 +147,22 @@ export function AppShell({ children, nav, active, onNavChange, title, subtitle, 
             <p>{subtitle}</p>
           </div>
           <div className="header-actions">
-            <button className="icon-btn"><Bell size={18} /><i /></button>
+            <button className="icon-btn" onClick={() => setNotifOpen(o => !o)}>
+              <Bell size={18} />
+              {unreadCount > 0 && <i className="notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</i>}
+            </button>
             <div className="header-avatar">{initials}</div>
           </div>
         </header>
         <main className="app-main">{children}</main>
       </div>
+      {notifOpen && (
+        <NotifDrawer
+          familyId={notifFamilyId}
+          teacherId={notifTeacherId}
+          onClose={() => setNotifOpen(false)}
+        />
+      )}
       <DemoBar active={role} />
     </div>
   );
@@ -87,7 +179,6 @@ function DemoBar({ active }: { active: Role }) {
     { label: 'Teacher', path: '/teacher', role: 'teacher' },
   ];
 
-  // Demo families — one per gating state so every state is testable
   const families: { label: string; id: string; desc: string }[] = [
     { label: 'f1', id: 'f1', desc: 'Active term, 3 credits' },
     { label: 'f2', id: 'f2', desc: 'Active term, 0 credits' },

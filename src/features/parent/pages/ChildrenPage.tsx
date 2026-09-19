@@ -5,9 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../../components/ui/Button';
 import { Progress } from '../../../components/ui/Progress';
 import { dataClient } from '../../../lib/data/client';
-
-// TODO: replace hardcoded familyId with auth context
-const FAMILY_ID = 'f1';
+import { useAuth } from '../../../app/providers';
 
 // Static enrichment per child id
 const enrichment: Record<string, { maths: number; english: number }> = {
@@ -18,19 +16,20 @@ const enrichment: Record<string, { maths: number; english: number }> = {
 export function ChildrenPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { familyId } = useAuth();
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: '', year: 'Year 1', school: '' });
 
   const { data: children = [] } = useQuery({
-    queryKey: ['children', FAMILY_ID],
-    queryFn: () => dataClient.getChildren(FAMILY_ID),
+    queryKey: ['children', familyId],
+    queryFn: () => dataClient.getChildren(familyId),
   });
 
   const addChild = useMutation({
     mutationFn: (child: { name: string; year: string; school: string; initials: string }) =>
-      dataClient.addChild(FAMILY_ID, child),
+      dataClient.addChild(familyId, child),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['children', FAMILY_ID] });
+      qc.invalidateQueries({ queryKey: ['children', familyId] });
       setForm({ name: '', year: 'Year 1', school: '' });
       setShowAdd(false);
     },
