@@ -27,9 +27,10 @@ export function LandingPage() {
           <a href="#why">Why fairybread?</a>
         </nav>
         <div className="top-actions">
-          <Button variant="ghost" onClick={() => navigate('/parent')}>
-            Parent portal <ArrowRight size={15} />
+          <Button variant="ghost" onClick={() => navigate('/login')}>
+            Sign in <ArrowRight size={15} />
           </Button>
+          <Button onClick={() => navigate('/signup')}>Get started</Button>
           <button className="mobile-menu"><Menu size={22} /></button>
         </div>
       </header>
@@ -41,8 +42,8 @@ export function LandingPage() {
             <h1>Make maths feel<br /><em>magical.</em></h1>
             <p>Supportive tutoring for curious minds, with a little more colour, confidence and joy in every session.</p>
             <div className="hero-actions">
-              <Button onClick={() => navigate('/parent')} icon={ArrowRight}>Explore parent portal</Button>
-              <Button variant="secondary" onClick={() => navigate('/admin')}>Admin demo</Button>
+              <Button onClick={() => navigate('/signup')} icon={ArrowRight}>Create your account</Button>
+              <Button variant="secondary" onClick={() => navigate('/login')}>Sign in</Button>
             </div>
             <div className="trust-row">
               <div className="avatar-stack"><span>SJ</span><span>OW</span><span>+48</span></div>
@@ -129,7 +130,7 @@ export function LandingPage() {
             <div className="eyebrow">Ready when you are</div>
             <h2>Make learning a little<br /><em>more fun.</em></h2>
           </div>
-          <Button onClick={() => navigate('/parent')} variant="secondary" icon={ArrowRight}>Step inside the portal</Button>
+          <Button onClick={() => navigate('/signup')} variant="secondary" icon={ArrowRight}>Create your account</Button>
         </section>
       </main>
       <footer>

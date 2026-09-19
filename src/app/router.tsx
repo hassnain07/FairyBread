@@ -1,5 +1,7 @@
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { LandingPage } from '../features/marketing/pages/LandingPage';
+import { LoginPage } from '../features/auth/pages/LoginPage';
+import { SignupPage } from '../features/auth/pages/SignupPage';
 import { ParentLayout } from '../features/parent/pages/ParentLayout';
 import { AdminLayout } from '../features/admin/pages/AdminLayout';
 import { TeacherLayout } from '../features/teacher/pages/TeacherLayout';
@@ -41,6 +43,8 @@ import { TeacherReportsPage } from '../features/teacher/pages/TeacherReportsPage
 
 const router = createBrowserRouter([
   { path: '/', element: <LandingPage /> },
+  { path: '/login', element: <LoginPage /> },
+  { path: '/signup', element: <SignupPage /> },
   {
     path: '/parent',
     element: <ParentLayout />,
