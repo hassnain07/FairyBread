@@ -1,5 +1,5 @@
 export type BookingSource = 'term_credit' | 'individual_purchase';
-export type BookingStatus = 'confirmed' | 'waiting_list' | 'cancelled';
+export type BookingStatus = 'confirmed' | 'cancelled';
 
 export type ClassBooking = {
   id: string;

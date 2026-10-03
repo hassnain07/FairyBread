@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { BookOpen, CircleDollarSign, Clock3, LayoutDashboard, Mail, PhoneCall, Presentation, Settings, Ticket, UserRound, Users } from 'lucide-react';
+import { BookOpen, CalendarDays, CircleDollarSign, LayoutDashboard, Mail, PhoneCall, Presentation, Settings, Ticket, UserRound, Users } from 'lucide-react';
 import { AppShell } from '../../../components/layout/AppShell';
 
 const nav = [
@@ -12,8 +12,8 @@ const nav = [
   { id: '/admin/messages', label: 'Messages', icon: Mail },
   { id: '/admin/tutors', label: 'Tutors', icon: UserRound },
   { id: '/admin/parents', label: 'Parents', icon: Users },
+  { id: '/admin/timetable', label: 'Timetable', icon: CalendarDays },
   { id: '/admin/programs', label: 'Programs', icon: BookOpen },
-  { id: '/admin/waiting-lists', label: 'Waiting Lists', icon: Clock3 },
   { id: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -26,8 +26,8 @@ const titles: Record<string, [string, string]> = {
   '/admin/messages': ['Messages', 'Stay close to every family.'],
   '/admin/tutors': ['Tutors', 'Meet the team behind every session.'],
   '/admin/parents': ['Parents', 'Every family, connected in one place.'],
+  '/admin/timetable': ['Timetable', 'Build and manage the term class schedule.'],
   '/admin/programs': ['Programs', 'What we teach and who is learning.'],
-  '/admin/waiting-lists': ['Waiting Lists', 'Who is hoping to join a full class.'],
   '/admin/settings': ['Settings', 'Business details and notification preferences.'],
 };
 

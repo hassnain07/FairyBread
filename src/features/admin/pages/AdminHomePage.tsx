@@ -1,4 +1,4 @@
-import { ArrowRight, BarChart3, Bell, CalendarDays, ChevronRight, CircleDollarSign, ClipboardList, Clock3, FileText, GraduationCap, Sparkles } from 'lucide-react';
+import { ArrowRight, BarChart3, Bell, CalendarDays, ChevronRight, CircleDollarSign, ClipboardList, FileText, GraduationCap, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 function Stat({ label, value, accent, icon: Icon }: { label: string; value: string; accent: string; icon: React.ElementType }) {
@@ -33,7 +33,6 @@ export function AdminHomePage() {
         <Stat label="Classes today" value="12" accent="teal" icon={CalendarDays} />
         <Stat label="Pending payments" value="3" accent="orange" icon={CircleDollarSign} />
         <Stat label="Reports due" value="8" accent="green" icon={FileText} />
-        <Stat label="Waiting list" value="5" accent="magenta" icon={Clock3} />
       </div>
       <div className="admin-grid">
         <div className="card admin-chart">
@@ -63,7 +62,7 @@ export function AdminHomePage() {
       <div className="admin-grid">
         <div className="card admin-list">
           <div className="card-heading"><div><span className="label">Needs your attention</span><h3>Little nudges</h3></div></div>
-          {[['8 reports due this week', 'Prepare and share progress updates', '/admin/reports'], ['3 payments to follow up', 'A friendly reminder may help', '/admin/payments'], ['5 students on the waiting list', 'Review class availability', '/admin/classes']].map(([x, y, p], i) => (
+          {[['8 reports due this week', 'Prepare and share progress updates', '/admin/reports'], ['3 payments to follow up', 'A friendly reminder may help', '/admin/payments']].map(([x, y, p], i) => (
             <button className="nudge" key={x} onClick={() => navigate(p)}>
               <span className={`nudge-icon ${colours[i]}`}><Bell size={16} /></span>
               <div><strong>{x}</strong><small>{y}</small></div>

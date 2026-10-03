@@ -23,6 +23,7 @@ let _payments = [...mockPayments];
 let _conversations = [...mockConversations];
 let _messages = [...mockMessages];
 let _notifications = [...mockNotifications];
+let _documents: Record<string, string> = {}; // key → object URL (mock only)
 
 export const mockTeachers: Teacher[] = [
   { id: 'tch1', name: 'Jessica Taylor', initials: 'JT', subjects: ['Mathematics', 'English'], color: 'pink' },
@@ -30,14 +31,14 @@ export const mockTeachers: Teacher[] = [
   { id: 'tch3', name: 'Daniel Smith', initials: 'DS', subjects: ['Reading'], color: 'orange' },
 ];
 
-export const mockClassInstances: ClassInstance[] = [
+const _seedClassInstances: ClassInstance[] = [
   // TODO: confirm with client — price is internal/admin-facing only during term-credit booking.
-  // Only shown to admin/teacher and in individual class purchase flow.
   { id: 'ci1', teacher_id: 'tch1', subject: 'Mathematics', day_of_week: 'Monday', time: '3:30 PM', capacity: 15, enrolled: 12, price: INDIVIDUAL_CLASS_PRICE },
   { id: 'ci2', teacher_id: 'tch2', subject: 'English', day_of_week: 'Wednesday', time: '4:30 PM', capacity: 15, enrolled: 13, price: INDIVIDUAL_CLASS_PRICE },
   { id: 'ci3', teacher_id: 'tch3', subject: 'Reading', day_of_week: 'Thursday', time: '4:00 PM', capacity: 15, enrolled: 15, price: INDIVIDUAL_CLASS_PRICE },
   { id: 'ci4', teacher_id: 'tch1', subject: 'Mathematics', day_of_week: 'Friday', time: '3:00 PM', capacity: 12, enrolled: 8, price: INDIVIDUAL_CLASS_PRICE },
 ];
+let _classInstances = [..._seedClassInstances];
 
 export const mockDataClient: DataClient = {
   async getFamily(familyId) {
@@ -140,7 +141,25 @@ export const mockDataClient: DataClient = {
     return mockTeachers;
   },
   async getClassInstances() {
-    return mockClassInstances;
+    return _classInstances;
+  },
+  async createClassInstance(cls) {
+    const c: ClassInstance = { ...cls, id: `ci${Date.now()}`, enrolled: 0 };
+    _classInstances = [..._classInstances, c];
+    return c;
+  },
+  async updateClassInstance(id, patch) {
+    let updated: ClassInstance | undefined;
+    _classInstances = _classInstances.map(c => {
+      if (c.id !== id) return c;
+      updated = { ...c, ...patch };
+      return updated;
+    });
+    if (!updated) throw new Error(`ClassInstance ${id} not found`);
+    return updated;
+  },
+  async deleteClassInstance(id) {
+    _classInstances = _classInstances.filter(c => c.id !== id);
   },
   async getIndividualPurchases(familyId) {
     return _individualPurchases.filter(p => p.family_id === familyId);
@@ -207,5 +226,15 @@ export const mockDataClient: DataClient = {
         (teacherId && n.teacher_id === teacherId);
       return mine ? { ...n, read: true } : n;
     });
+  },
+  async getDocuments() {
+    return { ..._documents };
+  },
+  async uploadDocument(key, file) {
+    // Revoke previous object URL to avoid memory leaks
+    if (_documents[key]) URL.revokeObjectURL(_documents[key]);
+    const url = URL.createObjectURL(file);
+    _documents = { ..._documents, [key]: url };
+    return url;
   },
 };

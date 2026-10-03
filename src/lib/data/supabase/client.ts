@@ -23,6 +23,9 @@ export const supabaseDataClient: DataClient = {
   async verifyPayment() { throw new Error('Supabase not implemented yet'); },
   async getTeachers() { throw new Error('Supabase not implemented yet'); },
   async getClassInstances() { throw new Error('Supabase not implemented yet'); },
+  async createClassInstance() { throw new Error('Supabase not implemented yet'); },
+  async updateClassInstance() { throw new Error('Supabase not implemented yet'); },
+  async deleteClassInstance() { throw new Error('Supabase not implemented yet'); },
   async getReports() { throw new Error('Supabase not implemented yet'); },
   async createReport() { throw new Error('Supabase not implemented yet'); },
   async getTeacherAssessments() { throw new Error('Supabase not implemented yet'); },
@@ -34,4 +37,6 @@ export const supabaseDataClient: DataClient = {
   async getNotifications() { throw new Error('Supabase not implemented yet'); },
   async markNotificationRead() { throw new Error('Supabase not implemented yet'); },
   async markAllNotificationsRead() { throw new Error('Supabase not implemented yet'); },
+  async getDocuments() { throw new Error('Supabase not implemented yet'); },
+  async uploadDocument() { throw new Error('Supabase not implemented yet'); },
 };

@@ -1,4 +1,4 @@
-import { ArrowRight, Check, CircleDollarSign, Clock3, CreditCard, Ticket, X } from 'lucide-react';
+import { ArrowRight, Check, CircleDollarSign, CreditCard, Ticket, X } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -42,7 +42,6 @@ export function BookClassPage() {
 
   const [bookedClass, setBookedClass] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<typeof classes[0] | null>(null);
-  const [showWaiting, setShowWaiting] = useState(false);
 
   if (isLoading) return <div className="page-stack"><p>Loading...</p></div>;
 
@@ -217,7 +216,7 @@ export function BookClassPage() {
               {isBooked ? (
                 <div className="booked-confirm"><Check size={16} /> Booked</div>
               ) : isFull ? (
-                <Button variant="soft" onClick={() => setShowWaiting(true)} icon={Clock3}>Join waiting list</Button>
+                <Button variant="soft" disabled>Class full</Button>
               ) : canBook ? (
                 <Button onClick={() => setConfirming(x)} icon={Check}>
                   {usingCredit ? 'Book with credit' : `Book for $${INDIVIDUAL_CLASS_PRICE}`}
@@ -282,19 +281,6 @@ export function BookClassPage() {
         </div>
       )}
 
-      {/* ── Waiting list modal ── */}
-      {showWaiting && (
-        <div className="modal-backdrop" onClick={() => setShowWaiting(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setShowWaiting(false)}><X size={18} /></button>
-            <div className="modal-icon"><Clock3 size={22} /></div>
-            <h2>Join the waiting list</h2>
-            <p>We'll let you know as soon as a spot opens up for {childFirstName}.</p>
-            <Button onClick={() => setShowWaiting(false)}>Join waiting list</Button>
-            <button className="modal-cancel" onClick={() => setShowWaiting(false)}>Not now</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

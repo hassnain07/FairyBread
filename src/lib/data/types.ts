@@ -36,6 +36,9 @@ export interface DataClient {
   getTeachers(): Promise<Teacher[]>;
   // Classes
   getClassInstances(): Promise<ClassInstance[]>;
+  createClassInstance(cls: Omit<ClassInstance, 'id' | 'enrolled'>): Promise<ClassInstance>;
+  updateClassInstance(id: string, patch: Partial<Omit<ClassInstance, 'id'>>): Promise<ClassInstance>;
+  deleteClassInstance(id: string): Promise<void>;
   // Reports
   getReports(teacherId: string): Promise<StudentReport[]>;
   createReport(report: Omit<StudentReport, 'id' | 'created_at'>): Promise<StudentReport>;
@@ -51,6 +54,9 @@ export interface DataClient {
   getNotifications(familyId?: string, teacherId?: string): Promise<AppNotification[]>;
   markNotificationRead(notificationId: string): Promise<void>;
   markAllNotificationsRead(familyId?: string, teacherId?: string): Promise<void>;
+  // Documents (Terms & Conditions, Privacy Policy)
+  getDocuments(): Promise<Record<string, string>>; // key → URL
+  uploadDocument(key: string, file: File): Promise<string>; // returns URL
   // Unused PaymentType re-export for consumers
   _paymentType?: PaymentType;
 }

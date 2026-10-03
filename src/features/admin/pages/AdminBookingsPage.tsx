@@ -6,7 +6,7 @@ import { dataClient } from '../../../lib/data/client';
 
 const ALL_FAMILY_IDS = ['f1', 'f2', 'f3', 'f4'];
 
-const FILTER_OPTIONS = ['All', 'Confirmed', 'Cancelled', 'Waiting list'] as const;
+const FILTER_OPTIONS = ['All', 'Confirmed', 'Cancelled'] as const;
 type Filter = typeof FILTER_OPTIONS[number];
 
 export function AdminBookingsPage() {
@@ -53,7 +53,6 @@ export function AdminBookingsPage() {
     if (filter === 'All') return true;
     if (filter === 'Confirmed') return booking.status === 'confirmed';
     if (filter === 'Cancelled') return booking.status === 'cancelled';
-    if (filter === 'Waiting list') return booking.status === 'waiting_list';
     return true;
   });
 
@@ -61,7 +60,6 @@ export function AdminBookingsPage() {
     All: enriched.length,
     Confirmed: enriched.filter(e => e.booking.status === 'confirmed').length,
     Cancelled: enriched.filter(e => e.booking.status === 'cancelled').length,
-    'Waiting list': enriched.filter(e => e.booking.status === 'waiting_list').length,
   };
 
   return (

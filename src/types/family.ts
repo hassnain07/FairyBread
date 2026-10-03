@@ -13,6 +13,10 @@ export type Child = {
   school: string;
   enrolled?: boolean;
   // Enrolment profile — filled in during enrolment
+  familyName?: string;
+  givenName?: string;
+  preferredName?: string;
+  concern?: string;
   subjects?: string[];
   preferredDays?: string[];
   goals?: string;

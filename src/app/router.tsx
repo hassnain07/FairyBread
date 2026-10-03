@@ -25,11 +25,11 @@ import { AdminPaymentsPage } from '../features/admin/pages/AdminPaymentsPage';
 import { AdminTutorsPage } from '../features/admin/pages/AdminTutorsPage';
 import { AdminParentsPage } from '../features/admin/pages/AdminParentsPage';
 import { AdminProgramsPage } from '../features/admin/pages/AdminProgramsPage';
-import { AdminWaitingListsPage } from '../features/admin/pages/AdminWaitingListsPage';
 import { AdminSettingsPage } from '../features/admin/pages/AdminSettingsPage';
 import { AdminFamilyBookingPage } from '../features/admin/pages/AdminFamilyBookingPage';
 import { AdminMyTeachingPage } from '../features/admin/pages/AdminMyTeachingPage';
 
+import { AdminTimetablePage } from '../features/admin/pages/AdminTimetablePage';
 import { AdminMessagesPage } from '../features/admin/pages/AdminMessagesPage';
 
 // Teacher pages
@@ -71,8 +71,8 @@ const router = createBrowserRouter([
       { path: 'payments', element: <AdminPaymentsPage /> },
       { path: 'tutors', element: <AdminTutorsPage /> },
       { path: 'parents', element: <AdminParentsPage /> },
+      { path: 'timetable', element: <AdminTimetablePage /> },
       { path: 'programs', element: <AdminProgramsPage /> },
-      { path: 'waiting-lists', element: <AdminWaitingListsPage /> },
       { path: 'settings', element: <AdminSettingsPage /> },
       { path: 'messages', element: <AdminMessagesPage /> },
       { path: 'family-booking', element: <AdminFamilyBookingPage /> },
